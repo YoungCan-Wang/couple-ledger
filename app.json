@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "小两口记账",
+    "slug": "couple-ledger",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "coupleledger",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#FFF5F0"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.couple.ledger"
+    },
+    "android": {
+      "package": "com.couple.ledger",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFF5F0"
+      },
+      "permissions": ["RECEIVE_BOOT_COMPLETED", "POST_NOTIFICATIONS"]
+    },
+    "notification": {
+      "color": "#FF7EA8"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "00000000-0000-0000-0000-000000000000"
+      }
+    }
+  }
+}
