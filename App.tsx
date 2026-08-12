@@ -10,6 +10,7 @@ import Todos from "./src/screens/Todos";
 import Us from "./src/screens/Us";
 import BottomNav from "./src/components/BottomNav";
 import { useStore } from "./src/store";
+import { isFirebaseConfigured } from "./src/firebase";
 
 const Tab = createBottomTabNavigator();
 
@@ -20,6 +21,14 @@ export default function App() {
   useEffect(() => {
     carryOver();
   }, [carryOver]);
+
+  // 若已配置 Firebase 且存有账本 ID，则自动重连云端同步
+  useEffect(() => {
+    const st = useStore.getState();
+    if (isFirebaseConfigured && st.ledgerId.trim() && st.syncStatus === "local") {
+      st.connect();
+    }
+  }, []);
 
   return (
     <NavigationContainer>

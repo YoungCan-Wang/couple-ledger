@@ -45,16 +45,35 @@ Android SDK / Java，对非技术用户最友好。
 
 ---
 
-## 三、关于"两人同步"（重要）
+## 三、两人实时同步（已接入 Firebase，免费）
 
-当前版本数据存在**各自手机本地**（AsyncStorage）。也就是说：你俩能在同一套界面里记账、
-但数据暂时不会自动互相同步——要做到"我填的他也能看到"，需要一个**云端账本**（小服务器）。
+数据现在可以走 **Firebase Firestore** 实时同步：你俩在「我们」页填**同一个账本 ID**，
+两台手机即自动互相同步——我记一笔，他的手机立刻出现。`src/store.ts` 用 `onSnapshot`
+订阅云端账本，断网时退回本机本地（AsyncStorage），联网后继续同步。
 
-接入方法（给开发者 / 进阶用户）：
-- 在 `src/store.ts` 里把 `addTransaction / addTodo` 等动作同时写一份到云端
-  （推荐免费方案 [Supabase](https://supabase.com) 的数据库 + 实时订阅），
-  两人登录同一账号即可实时同步。
-- 仓库已用 `zustand` 的 `persist` 做了本地存储，加云端只需在 actions 里补一行网络写入。
+### 启用同步只需 4 步
+1. 打开 https://console.firebase.google.com → 新建项目 → 左侧「Firestore 数据库」→ 创建（规则先用测试模式，稍后替换）。
+2. 项目设置 → 「你的应用」→ 选 Web 应用 → 复制 SDK 配置（apiKey / projectId 等）。
+3. 把配置填进 `src/firebase.ts` 顶部的 `firebaseConfig`（把 `YOUR_xxx` 占位符替换掉）。
+4. `npm install` 安装依赖，重新打包 APK（见第一节）。两台手机都装上后，在「我们」页
+   填同一个账本 ID 点「连接」即可。
+
+> Firebase 的 apiKey 是**公开**的（打包进 App 也安全），真正的权限由下面安全规则控制；
+> 账本 ID 就是你们俩的"共享钥匙"，谁知道它谁就能读写该账本，请勿外泄。
+
+### 安全规则（建议）
+把根目录 `firestore.rules` 部署到 Firebase（控制台「Firestore → 规则」粘贴，或
+`firebase deploy --only firestore:rules`），使匿名登录用户只能读写自己的账本文档：
+```js
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /ledgers/{ledgerId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
 
 ---
 
@@ -69,7 +88,7 @@ couple-ledger/
 └── src/
     ├── theme.ts         # 配色 + 分类 + 兔虎身份
     ├── types.ts         # 交易 / 待办 / 提醒 类型
-    ├── store.ts         # 本地持久化 + 示例数据 + 顺延逻辑
+    ├── store.ts         # 本地持久化 + Firebase 实时同步 + 示例数据 + 顺延逻辑
     ├── components/      # BottomNav / CategoryIcon / Mascot
     └── screens/         # Home / AddEntry / Ledger / Todos / Us / DailyPush
 ```
@@ -85,4 +104,4 @@ npx expo start
 
 ---
 
-需要我帮你把"两人同步"接上 Supabase，或调整任何界面文案 / 配色，随时说。
+需要我帮你把 Firebase 配置接好、或调整任何界面文案 / 配色，随时说。
