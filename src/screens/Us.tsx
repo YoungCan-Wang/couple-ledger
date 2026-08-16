@@ -55,7 +55,9 @@ export default function Us() {
         {/* 共享账本配对 */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>共享账本</Text>
-          <Text style={styles.hint}>和另一半填同一个账本 ID，两台手机即可实时同步（数据存云端）。</Text>
+          <Text style={styles.hint}>
+            和另一半填同一个账本 ID，两台手机即可同步（数据存腾讯云 CloudBase）。
+          </Text>
           <View style={styles.inputRow}>
             <TextInput
               style={styles.input}

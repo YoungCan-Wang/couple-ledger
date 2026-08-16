@@ -1,10 +1,16 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { doc, onSnapshot, setDoc, type DocumentReference } from "firebase/firestore";
 
 import { type Transaction, type Todo, type Reminders, todayISO, uid } from "./types";
-import { getFirebase, anonymousSignIn, isFirebaseConfigured } from "./firebase";
+import {
+  anonymousSignIn,
+  clearCloudBaseSession,
+  createLedger,
+  getLedger,
+  isCloudBaseConfigured,
+  updateLedger,
+} from "./cloudbase";
 
 export type SyncStatus = "local" | "connecting" | "synced" | "error";
 
@@ -29,9 +35,14 @@ interface State {
   setReminder: (key: keyof Reminders, value: boolean) => void;
 }
 
-// 模块级：当前云端账本引用与监听器（不进 store，避免重复渲染）
-let fbRef: DocumentReference | null = null;
-let unsub: (() => void) | null = null;
+// 模块级：当前云端账本与轮询（不进 store，避免重复渲染）
+// HTTP API 无 .watch()，用短间隔 GET 近似实时
+const POLL_MS = 2500;
+let activeLedgerId: string | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+let lastAppliedAt = 0;
+let lastPushedAt = 0;
+let pollFails = 0;
 
 const yesterdayISO = (): string => {
   const d = new Date();
@@ -67,13 +78,66 @@ const seed = () => {
 export const useStore = create<State>()(
   persist(
     (set, get) => {
-      // 已同步时把最新数组写回云端（merge 只更新对应字段）
+      const stopWatch = () => {
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+        activeLedgerId = null;
+        lastAppliedAt = 0;
+        lastPushedAt = 0;
+        pollFails = 0;
+      };
+
+      // 已同步时把最新数组写回云端（PATCH 只更新对应字段）
       const pushLedger = (partial: { transactions?: Transaction[]; todos?: Todo[] }) => {
-        if (fbRef && get().syncStatus === "synced") {
-          setDoc(fbRef, { ...partial, updatedAt: Date.now() }, { merge: true }).catch(() => {
+        const id = activeLedgerId;
+        if (id && get().syncStatus === "synced") {
+          const updatedAt = Date.now();
+          lastPushedAt = updatedAt;
+          updateLedger(id, { ...partial, updatedAt }).catch(() => {
             set({ syncStatus: "error", syncError: "同步写入失败，请检查网络" });
           });
         }
+      };
+
+      const applyRemote = async (id: string, isFirst: boolean) => {
+        const doc = await getLedger(id);
+        if (!doc) {
+          if (isFirst) {
+            const s = get();
+            const updatedAt = Date.now();
+            lastPushedAt = updatedAt;
+            await createLedger(id, {
+              transactions: s.transactions,
+              todos: s.todos,
+              updatedAt,
+            });
+            const again = await getLedger(id);
+            if (again) {
+              lastAppliedAt = again.updatedAt || updatedAt;
+              set({
+                transactions: again.transactions,
+                todos: again.todos,
+                syncStatus: "synced",
+                syncError: "",
+              });
+            } else {
+              lastAppliedAt = updatedAt;
+              set({ syncStatus: "synced", syncError: "" });
+            }
+          }
+          return;
+        }
+        if (doc.updatedAt && doc.updatedAt < lastPushedAt) return;
+        if (doc.updatedAt && doc.updatedAt === lastAppliedAt) return;
+        lastAppliedAt = doc.updatedAt || lastAppliedAt;
+        set({
+          transactions: doc.transactions,
+          todos: doc.todos,
+          syncStatus: "synced",
+          syncError: "",
+        });
       };
 
       return {
@@ -90,51 +154,44 @@ export const useStore = create<State>()(
             set({ syncStatus: "error", syncError: "请先填写共享账本 ID" });
             return;
           }
-          if (!isFirebaseConfigured) {
-            set({ syncStatus: "error", syncError: "Firebase 未配置（见 src/firebase.ts）" });
+          if (!isCloudBaseConfigured) {
+            set({ syncStatus: "error", syncError: "CloudBase 未配置（见 src/cloudbase.ts）" });
             return;
           }
+          stopWatch();
           set({ syncStatus: "connecting", syncError: "" });
           try {
-            const { db } = getFirebase();
             await anonymousSignIn();
-            fbRef = doc(db, "ledgers", id);
-            unsub = onSnapshot(
-              fbRef,
-              (snap) => {
-                if (!snap.exists()) {
-                  // 首次连接：用本地现有数据初始化云端账本
-                  const s = get();
-                  setDoc(
-                    fbRef!,
-                    { transactions: s.transactions, todos: s.todos, updatedAt: Date.now() },
-                    { merge: true }
-                  );
-                  set({ syncStatus: "synced" });
-                  return;
-                }
-                const data = snap.data() as { transactions?: Transaction[]; todos?: Todo[] };
-                set({
-                  transactions: data.transactions ?? [],
-                  todos: data.todos ?? [],
-                  syncStatus: "synced",
+            activeLedgerId = id;
+            await applyRemote(id, true);
+            if (get().syncStatus === "error") return;
+            pollTimer = setInterval(() => {
+              applyRemote(id, false)
+                .then(() => {
+                  pollFails = 0;
+                })
+                .catch((err: { message?: string }) => {
+                  pollFails += 1;
+                  if (pollFails >= 3) {
+                    set({
+                      syncStatus: "error",
+                      syncError: err?.message || "云端同步失败",
+                    });
+                  }
                 });
-              },
-              (err) => {
-                set({ syncStatus: "error", syncError: err.message || "实时同步失败" });
-              }
-            );
+            }, POLL_MS);
+            if (get().syncStatus === "connecting") {
+              set({ syncStatus: "synced", syncError: "" });
+            }
           } catch (e: any) {
+            stopWatch();
             set({ syncStatus: "error", syncError: e?.message || "连接失败" });
           }
         },
 
         disconnect: () => {
-          if (unsub) {
-            unsub();
-            unsub = null;
-          }
-          fbRef = null;
+          stopWatch();
+          clearCloudBaseSession();
           set({ syncStatus: "local", syncError: "" });
         },
 
@@ -195,6 +252,14 @@ export const useStore = create<State>()(
     {
       name: "couple-ledger-store",
       storage: createJSONStorage(() => AsyncStorage),
+      // syncStatus 不落盘：重启后先回到 local，再按 ledgerId 重连
+      partialize: (s) => ({
+        transactions: s.transactions,
+        todos: s.todos,
+        reminders: s.reminders,
+        quote: s.quote,
+        ledgerId: s.ledgerId,
+      }),
     }
   )
 );
