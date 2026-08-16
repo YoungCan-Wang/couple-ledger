@@ -6,17 +6,16 @@ import { getAuth, signInAnonymously, type Auth } from "firebase/auth";
 import { initializeFirestore, memoryLocalCache, type Firestore } from "firebase/firestore";
 
 /**
- * ⚠️ 把下面的占位符替换成你自己的 Firebase 项目配置。
- * 获取路径：Firebase 控制台 → 项目设置 → 「你的应用」→ SDK 配置（apiKey 等）。
+ * couple-ledger Web 应用的公开客户端 SDK 配置（项目 lucid-authority-380711）。
  * 注意：这些值是公开的（打包进 App 也安全），真正的权限由 Firestore 安全规则控制。
  */
 export const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID",
+  apiKey: "AIzaSyDUqstZ-daJNd1RKIjQgYvbaRReWAZQhQM",
+  authDomain: "lucid-authority-380711.firebaseapp.com",
+  projectId: "lucid-authority-380711",
+  storageBucket: "lucid-authority-380711.firebasestorage.app",
+  messagingSenderId: "935406959062",
+  appId: "1:935406959062:web:c69482bf18c2ee33b5cc77",
 };
 
 /** 是否把占位符替换成了真实配置 */
