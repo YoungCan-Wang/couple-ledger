@@ -45,36 +45,43 @@ Android SDK / Java，对非技术用户最友好。
 
 ---
 
-## 三、两人实时同步（已接入 Firebase，免费）
+## 三、两人云端同步（已接入腾讯云 CloudBase，国内可访问）
 
-数据现在可以走 **Firebase Firestore** 实时同步：你俩在「我们」页填**同一个账本 ID**，
-两台手机即自动互相同步——我记一笔，他的手机立刻出现。`src/store.ts` 用 `onSnapshot`
-订阅云端账本，断网时退回本机本地（AsyncStorage），联网后继续同步。
+数据走 **腾讯云开发 CloudBase** 文档型数据库：你俩在「我们」页填**同一个账本 ID**，
+点「连接」，两台手机即互相同步——我记一笔，对方过一两秒就能看到。
+`src/store.ts` 在连接后轮询 `ledgers/{ledgerId}`；断网时退回本机本地（AsyncStorage），
+未连接时完全本地可用。
+
+> 原先用过 Firebase，但大陆网络经常连不上，已整体换成 CloudBase（上海，免费体验版）。
+
+### 环境（已创建，不必再新建）
+| 项 | 值 |
+| --- | --- |
+| 显示名 | couple-ledger |
+| 环境 ID | `couple-ledger-d9gbsn9kl5582c5b1` |
+| 地域 | `ap-shanghai`（上海） |
+| 套餐 | 免费体验版 |
+| 文档库集合 | `ledgers`（已建） |
+| 匿名登录 | 已开启 |
+
+客户端配置在 `src/cloudbase.ts`（环境 ID + Publishable / App Access Key）。
+Publishable Key 和 Firebase 的 apiKey 同一类：**可以打进 App**，不是服务端 Secret。
+账本 ID 才是你们俩的「共享钥匙」，谁知道它谁就能读写该账本，请勿外泄。
+
+实名认证和兑换码已经用过。免费体验版大约每 **6 个月需要在控制台手动续期**，过期后同步会失败。
 
 ### 启用同步
-客户端 SDK 配置已写入 `src/firebase.ts`（GCP 项目 `lucid-authority-380711`，Web 应用 couple-ledger）。
-剩余只需确认控制台侧已就绪，然后重新打包：
-1. Firebase 控制台确认已创建 **Firestore** 数据库，并在 Authentication 开启 **匿名登录**（Anonymous）。
-2. 把根目录 `firestore.rules` 部署到该项目（见下方安全规则）。
-3. `npm install` 后重新打包 APK（见第一节）。两台手机都装上后，在「我们」页
+1. 控制台确认：匿名登录已开、集合 `ledgers` 已建，且登录用户（含匿名）可读写该集合。
+2. `npm install` 后重新打包 APK（见第一节）。两台手机都装上后，在「我们」页
    填同一个账本 ID 点「连接」即可。
 
-> Firebase 的 apiKey 是**公开**的（打包进 App 也安全），真正的权限由下面安全规则控制；
-> 账本 ID 就是你们俩的"共享钥匙"，谁知道它谁就能读写该账本，请勿外泄。
+权限模型：任意已登录用户（包括匿名）可读写 `ledgers/{id}`；安全靠账本 ID 保密，
+不再使用 Firebase `firestore.rules`。
 
-### 安全规则（建议）
-把根目录 `firestore.rules` 部署到 Firebase（控制台「Firestore → 规则」粘贴，或
-`firebase deploy --only firestore:rules`），使匿名登录用户只能读写自己的账本文档：
-```js
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /ledgers/{ledgerId} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-```
+### 为什么不用官方 RN SDK
+`@cloudbase/adapter-rn` 要求 React Native 0.76+ / Expo 52+。本仓库保持 **Expo 51 / RN 0.74**，
+用官方 HTTP API（`tcb-api.tencentcloudapi.com` 登录，`api.tcloudbasegateway.com` 读写文档）。
+HTTP API 没有 `.watch()`，因此用 2.5 秒轮询近似实时，而不是 WebSocket。
 
 ---
 
@@ -89,7 +96,8 @@ couple-ledger/
 └── src/
     ├── theme.ts         # 配色 + 分类 + 兔虎身份
     ├── types.ts         # 交易 / 待办 / 提醒 类型
-    ├── store.ts         # 本地持久化 + Firebase 实时同步 + 示例数据 + 顺延逻辑
+    ├── cloudbase.ts     # CloudBase HTTP 客户端（匿名登录 + 文档库）
+    ├── store.ts         # 本地持久化 + CloudBase 同步 + 示例数据 + 顺延逻辑
     ├── components/      # BottomNav / CategoryIcon / Mascot
     └── screens/         # Home / AddEntry / Ledger / Todos / Us / DailyPush
 ```

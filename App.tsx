@@ -10,24 +10,25 @@ import Todos from "./src/screens/Todos";
 import Us from "./src/screens/Us";
 import BottomNav from "./src/components/BottomNav";
 import { useStore } from "./src/store";
-import { isFirebaseConfigured } from "./src/firebase";
+import { isCloudBaseConfigured } from "./src/cloudbase";
 
 const Tab = createBottomTabNavigator();
 
 export default function App() {
-  const carryOver = useStore((s) => s.carryOverTodos);
-
-  // 打开 App 时把"昨天没完成"的待办顺延到今天
+  // 等 AsyncStorage 回填后再顺延待办、按已存账本 ID 重连（避免启动时读到空状态）
   useEffect(() => {
-    carryOver();
-  }, [carryOver]);
-
-  // 若已配置 Firebase 且存有账本 ID，则自动重连云端同步
-  useEffect(() => {
-    const st = useStore.getState();
-    if (isFirebaseConfigured && st.ledgerId.trim() && st.syncStatus === "local") {
-      st.connect();
+    const afterHydrate = () => {
+      const st = useStore.getState();
+      st.carryOverTodos();
+      if (isCloudBaseConfigured && st.ledgerId.trim()) {
+        st.connect();
+      }
+    };
+    if (useStore.persist.hasHydrated()) {
+      afterHydrate();
+      return;
     }
+    return useStore.persist.onFinishHydration(afterHydrate);
   }, []);
 
   return (
