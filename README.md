@@ -51,11 +51,12 @@ Android SDK / Java，对非技术用户最友好。
 两台手机即自动互相同步——我记一笔，他的手机立刻出现。`src/store.ts` 用 `onSnapshot`
 订阅云端账本，断网时退回本机本地（AsyncStorage），联网后继续同步。
 
-### 启用同步只需 4 步
-1. 打开 https://console.firebase.google.com → 新建项目 → 左侧「Firestore 数据库」→ 创建（规则先用测试模式，稍后替换）。
-2. 项目设置 → 「你的应用」→ 选 Web 应用 → 复制 SDK 配置（apiKey / projectId 等）。
-3. 把配置填进 `src/firebase.ts` 顶部的 `firebaseConfig`（把 `YOUR_xxx` 占位符替换掉）。
-4. `npm install` 安装依赖，重新打包 APK（见第一节）。两台手机都装上后，在「我们」页
+### 启用同步
+客户端 SDK 配置已写入 `src/firebase.ts`（GCP 项目 `lucid-authority-380711`，Web 应用 couple-ledger）。
+剩余只需确认控制台侧已就绪，然后重新打包：
+1. Firebase 控制台确认已创建 **Firestore** 数据库，并在 Authentication 开启 **匿名登录**（Anonymous）。
+2. 把根目录 `firestore.rules` 部署到该项目（见下方安全规则）。
+3. `npm install` 后重新打包 APK（见第一节）。两台手机都装上后，在「我们」页
    填同一个账本 ID 点「连接」即可。
 
 > Firebase 的 apiKey 是**公开**的（打包进 App 也安全），真正的权限由下面安全规则控制；
@@ -104,4 +105,4 @@ npx expo start
 
 ---
 
-需要我帮你把 Firebase 配置接好、或调整任何界面文案 / 配色，随时说。
+需要调整界面文案 / 配色，随时说。
